@@ -1,0 +1,17 @@
+OASISFormat: 0.2
+Name:        shred-for-satan
+Version:     0
+Synopsis:    MIDI-driven metronome
+Authors:     Julian Squires
+License:     BSD3
+
+Executable shred
+  Path:       .
+  CompiledObject: native
+  BuildTools: ocamlbuild
+  ByteOpt:    -thread
+  NativeOpt:  -thread
+  BuildDepends: unix, threads, lablgtk2, bigarray, camlp4.lib, bitstring.syntax, portaudio
+  MainIs:     main.ml
+
+
