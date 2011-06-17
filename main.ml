@@ -46,7 +46,7 @@ let main () =
   let meter_label = GMisc.label ~text:"4/4" ~packing:(hbox#pack ~expand:false ~padding:10) () in
   let tempo_label = GMisc.label ~text:"♩ = 120" ~packing:(hbox#pack ~expand:false ~padding:10) () in
 
-  let play_btn = GButton.button ~stock:`MEDIA_PLAY ~packing:(vbox#pack ~expand:false) () in
+  let play_btn = GButton.toggle_button ~stock:`MEDIA_PLAY ~packing:(vbox#pack ~expand:false) () in
   play_btn#misc#set_sensitive false;
 
   let update_labels_for_position bar = begin
@@ -80,9 +80,6 @@ let main () =
     a
     in
   let play_mode = ref false in
-  let stop_playing () =
-    play_mode := false;
-    Metronome.stop () in
   play_btn#connect#clicked ~callback:(fun () ->
     let bar_count = ref 0 in
     let next_bar = ref (truncate position#value) in
@@ -93,14 +90,15 @@ let main () =
       end else begin
 	position#set_value (float_of_int !next_bar);
 	GtkThread.async (fun () -> update_labels_for_position (truncate position#value)) ();
-	if position#value >= position#upper then [| (0.,1.) |]
-	else (incr next_bar; construct_measure (!meter).Midi.numerator (!meter).Midi.denominator)
+	if position#value >= position#upper then begin
+	  play_btn#set_active false;
+	  [| (0.,1.) |]
+	end else (incr next_bar; construct_measure (!meter).Midi.numerator (!meter).Midi.denominator)
       end
     end in
-    play_mode := not !play_mode;
-    match !play_mode with
-      | true -> Metronome.start fresh_bar
-      | false -> Metronome.stop ());
+    (match play_btn#active with
+      | true -> play_btn#set_label (GtkStock.convert_id `MEDIA_STOP); Metronome.start fresh_bar
+      | false -> play_btn#set_label (GtkStock.convert_id `MEDIA_PLAY); Metronome.stop ()));
 
   List.iter (fun (l,f) -> let i = GMenu.menu_item ~label:l ~packing:file_menu#append () in
                           ignore (i#connect#activate ~callback:f); ())
