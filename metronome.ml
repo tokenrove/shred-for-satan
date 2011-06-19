@@ -18,17 +18,20 @@ let state = ref Tick
 let duration = ref 0			(* samples *)
 
 let tick_duration = 0.04		(* seconds *)
-let fade_samples = 5			(* samples *)
+let fade_samples = 10			(* samples *)
 let pitch = ref 607.
 let period = ref 109.
 let measure_p = ref 0
 let new_measure_fn = ref (fun () -> [| (0.,1.) |])
 let measure = ref (!new_measure_fn ())
 
+let inner_vol = ref 0.
+
 let start fn =
   may Portaudio.start_stream !stream;
   new_measure_fn := fn;
   state := Tick;
+  inner_vol := !volume;
   duration := (truncate (samples_per_sec *. tick_duration)) - fade_samples;
   period := samples_per_sec /. !pitch;
   measure := (!new_measure_fn) ();
@@ -40,17 +43,13 @@ let last_val = ref 0.
 let update _ out l =
   let set i v = Genarray.set out [|i|] v in
   for i = 0 to pred l do
-    (match !state with
-      | Tick -> set i (if !period = 0. then 0. else (!volume *. sin (two_pi *. ((mod_float (float_of_int !duration) !period) /. !period))))
-      | Rest -> set i 0.
-      | Fade -> set i (!last_val *. 0.01)
-    );
-    last_val := Genarray.get out [|i|];
+    set i (if !period = 0. then 0. else (!inner_vol *. sin (two_pi *. ((mod_float (float_of_int !duration) (!period -. 1.)) /. !period))));
+    (match !state with | Fade -> inner_vol := !inner_vol *. 0.01 | _ -> () );
     decr duration;
     if (!duration) <= 0 then
       (match !state with
-	| Tick -> state := Fade; duration := 10
-	| Fade -> state := Rest;
+	| Tick -> state := Fade; duration := fade_samples;
+	| Fade -> state := Rest; inner_vol := 0.;
 	  incr measure_p;
 	  if !measure_p >= Array.length !measure then begin
 	    measure_p := 0;
@@ -58,7 +57,7 @@ let update _ out l =
 	  end;
 	  let t = (snd (!measure).(!measure_p)) in
 	  duration := truncate ((samples_per_sec *. t) -. tick_duration)
-	| Rest -> state := Tick;
+	| Rest -> state := Tick; inner_vol := !volume;
 	  duration := (truncate (samples_per_sec *. tick_duration)) - fade_samples;
 	  let pitch = (fst (!measure).(!measure_p)) in
 	  period := if pitch = 0. then 0. else samples_per_sec /. pitch);
