@@ -102,7 +102,7 @@ let main () =
       end
     end in
     play_btn#set_label (GtkStock.convert_id (if play_btn#active then `MEDIA_STOP else `MEDIA_PLAY));
-    if play_btn#active then Metronome.start fresh_bar else Metronome.stop ()));
+    GtkThread.async (if play_btn#active then (fun () -> Metronome.start fresh_bar) else Metronome.stop) ()));
 
   List.iter (fun (l,f) -> let i = GMenu.menu_item ~label:l ~packing:file_menu#append () in
                           ignore (i#connect#activate ~callback:f); ())
