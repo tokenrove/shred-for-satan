@@ -51,9 +51,15 @@ let main () =
 
   let update_labels_for_position bar = begin
     let nearest_to_bar p blank = List.fold_left (fun a (m,b) -> if m <= bar && (p b) then (m,b) else a) (0,blank) !midi_state in begin
-      meter := (match (nearest_to_bar (function | Midi.Meter _ -> true | _ -> false) (Midi.Meter {Midi.numerator=4;Midi.denominator=4;})) with | (_,Midi.Meter m) -> m);
-      tempo := (match (nearest_to_bar (function | Midi.Tempo _ -> true | _ -> false) (Midi.Tempo 120.)) with | (_,Midi.Tempo t) -> t);
-      let key = (match (nearest_to_bar (function | Midi.Key _ -> true | _ -> false) (Midi.Key (Midi.MajorKey 0))) with | (_,Midi.Key k) -> k) in
+      let blank = {Midi.numerator=4;Midi.denominator=4;} in
+      meter := (match
+	  (nearest_to_bar (function | Midi.Meter _ -> true | _ -> false) (Midi.Meter blank))
+	with | (_,Midi.Meter m) -> m | _ -> blank);
+      tempo := (match (nearest_to_bar (function | Midi.Tempo _ -> true | _ -> false) (Midi.Tempo 120.))
+	with | (_,Midi.Tempo t) -> t | _ -> 120.);
+      let blank = (Midi.MajorKey 0) in
+      let key = (match (nearest_to_bar (function | Midi.Key _ -> true | _ -> false) (Midi.Key blank))
+	with | (_,Midi.Key k) -> k | _ -> blank) in
       root_pitch := Midi.root_pitch_of_key key;
       key_label#set_label (Midi.pretty_print_key key);
       meter_label#set_label ((string_of_int (!meter).Midi.numerator)^"/"^(string_of_int (!meter).Midi.denominator));
@@ -61,7 +67,7 @@ let main () =
     end
   end in
 
-  position#connect#value_changed ~callback:(fun () -> update_labels_for_position (truncate (position#value)));
+  ignore (position#connect#value_changed ~callback:(fun () -> update_labels_for_position (truncate (position#value))));
 
   let load_file path = begin
     midi_state := Midi.read_midi_file path;
@@ -79,8 +85,7 @@ let main () =
     a.(0) <- (fifth !root_pitch,dur);
     a
     in
-  let play_mode = ref false in
-  play_btn#connect#clicked ~callback:(fun () ->
+  ignore (play_btn#connect#clicked ~callback:(fun () ->
     let bar_count = ref 0 in
     let next_bar = ref (truncate position#value) in
     let fresh_bar () = begin
@@ -96,16 +101,15 @@ let main () =
 	end else (incr next_bar; construct_measure (!meter).Midi.numerator (!meter).Midi.denominator)
       end
     end in
-    (match play_btn#active with
-      | true -> play_btn#set_label (GtkStock.convert_id `MEDIA_STOP); Metronome.start fresh_bar
-      | false -> play_btn#set_label (GtkStock.convert_id `MEDIA_PLAY); Metronome.stop ()));
+    play_btn#set_label (GtkStock.convert_id (if play_btn#active then `MEDIA_STOP else `MEDIA_PLAY));
+    if play_btn#active then Metronome.start fresh_bar else Metronome.stop ()));
 
   List.iter (fun (l,f) -> let i = GMenu.menu_item ~label:l ~packing:file_menu#append () in
                           ignore (i#connect#activate ~callback:f); ())
     [("Open",(fun () ->
       let chooser = GWindow.file_selection ~title:"Choose MIDI file" () in
-      chooser#ok_button#connect#clicked ~callback:(fun () -> load_file chooser#filename; chooser#destroy ());
-      chooser#cancel_button#connect#clicked ~callback:chooser#destroy;
+      ignore (chooser#ok_button#connect#clicked ~callback:(fun () -> load_file chooser#filename; chooser#destroy ()));
+      ignore (chooser#cancel_button#connect#clicked ~callback:chooser#destroy);
       chooser#show ()));
      ("Quit", GMain.Main.quit)];
 
