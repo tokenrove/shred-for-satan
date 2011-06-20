@@ -5,67 +5,97 @@ let may f x = match x with | (Some x) -> f x | None -> ()
 let stream = ref None
 
 let samples_per_sec = 44100.
-let two_pi = 4. *. (asin 1.)
 let volume = ref 0.375
 type state = Tick | Fade | Rest
 let state = ref Tick
 let duration = ref 0			(* samples *)
 
 let tick_duration = 0.04		(* seconds *)
-let fade_samples = 10			(* samples *)
-let period = ref 109.
+let fade_samples = 128			(* samples *)
+let fade_rate = 0.92
+let period = ref 0.
 let measure_p = ref 0
 let new_measure_fn = ref (fun () -> [| (0.,1.) |])
 let measure = ref (!new_measure_fn ())
 
 let inner_vol = ref 0.
+type mode = Silence | Sound
+let mode = ref Silence
+
+let next_bar () = measure_p := 0; measure := (!new_measure_fn) ()
+
+let next_beat () =
+  incr measure_p;
+  if !measure_p >= Array.length !measure then next_bar ()
+
+let next_period () =
+  let pitch = (fst (!measure).(!measure_p)) in
+  if pitch = 0. then 0. else samples_per_sec /. pitch
+
+let tick_duration_samples = (truncate (samples_per_sec *. tick_duration)) - fade_samples
+
+let s_count = ref 0.
 
 let start fn =
   new_measure_fn := fn;
-  measure := (!new_measure_fn) ();
-  measure_p := 0;
-  state := Tick;
+  next_bar ();
   inner_vol := !volume;
-  duration := (truncate (samples_per_sec *. tick_duration)) - fade_samples;
-  let pitch = (fst (!measure).(!measure_p)) in
-  period := if pitch = 0. then 0. else samples_per_sec /. pitch;
-  may Portaudio.start_stream !stream
+  period := next_period ();
+  duration := tick_duration_samples;
+  s_count := 0.;
+  state := Tick;
+  mode := Sound
 
-let sine_wave () = sin (two_pi *. ((mod_float (float_of_int !duration) !period) /. (!period -. 1.)))
-
-let next_bar () =
-  incr measure_p;
-  if !measure_p >= Array.length !measure then begin
-    measure_p := 0;
-    measure := (!new_measure_fn) ();
-  end
-
+let twopi = 4. *. (asin 1.)
+let sine_ct = 256
+let sines = let s = Array.make 256 0. in
+	    for i = 0 to 255 do
+	      s.(i) <- sin (twopi *. ((float_of_int i) /. 255.));
+	    done;
+	    s
+let sine_wave d p =
+  let v = ((mod_float d p) /. (p -. 1.)) in
+  sines.(min (truncate (256. *. v)) 255)
 
 let update _ out l =
+  if !mode == Silence then (Genarray.fill out 0.; 0)
+  else
   let set i v = Genarray.set out [|i|] v in
   for i = 0 to pred l do
-    set i (if !period = 0. then 0. else (!inner_vol *. sine_wave ()));
-    (match !state with | Fade -> inner_vol := !inner_vol *. 0.01 | _ -> () );
+    let o = (match !state with | Rest -> 0. | _ -> (!inner_vol *. sine_wave !s_count !period)) in
+    set i o;
+    (match !state with | Fade -> inner_vol := !inner_vol *. fade_rate | _ -> () );
+    s_count := !s_count +. 1.;
     decr duration;
     if (!duration) <= 0 then
       (match !state with
-	| Tick -> state := Fade; duration := fade_samples;
-	| Fade -> state := Rest; inner_vol := 0.;
+	| Tick ->
+	  state := Fade; duration := fade_samples;
+	| Fade ->
+	  state := Rest;
 	  let t = (snd (!measure).(!measure_p)) in
-	  duration := truncate ((samples_per_sec *. t) -. tick_duration)
-	| Rest -> state := Tick; inner_vol := !volume; next_bar ();
-	  duration := (truncate (samples_per_sec *. tick_duration)) - fade_samples;
-	  let pitch = (fst (!measure).(!measure_p)) in
-	  period := if pitch = 0. then 0. else samples_per_sec /. pitch);
+	  duration := truncate (samples_per_sec *. (t -. tick_duration))
+	| Rest ->
+	  state := Tick; inner_vol := !volume; next_beat ();
+	  s_count := 0.;
+	  period := next_period ();
+	  duration := tick_duration_samples);
   done;
-  if !period = 0. then 1 else 0
+  if !period = 0. then mode := Silence;
+  flush stdout;
+  0
 
 let init () =
   Portaudio.init ();
   at_exit Portaudio.terminate;
-  Printf.printf "Using %s.\n%!" (Portaudio.get_version_string ());
   (* NB: 0 for buffer size == unspecified *)
-  stream := Some (Portaudio.open_default_stream ~interleaved:true ~format:Portaudio.format_float32 ~callback:update 0 1 (truncate samples_per_sec) 0)
+  stream := Some (Portaudio.open_default_stream
+		    ~interleaved:true
+		    ~format:Portaudio.format_float32
+		    ~callback:update
+		    0 1 (truncate samples_per_sec) 16384);
+  may Portaudio.start_stream !stream
 
 let stop () =
-  may Portaudio.stop_stream !stream
+  (* may Portaudio.stop_stream !stream *)
+  mode := Silence
