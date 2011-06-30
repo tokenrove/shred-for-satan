@@ -32,8 +32,8 @@ let main () =
 
   let frame = GBin.frame ~label:"Speed:" ~packing:(vbox#pack ~expand:false ~padding:5) ~border_width:10 () in
   let hbox = GPack.hbox ~packing:frame#add () in
-  let speed_factor = GData.adjustment ~lower:0.001 ~upper:2. ~value:1. ~step_incr:0.1 ~page_size:0. () in
-  let _ = GRange.scale `HORIZONTAL ~value_pos:`RIGHT ~adjustment:speed_factor ~packing:(hbox#pack ~expand:true ~padding:10) () in
+  let speed_factor = GData.adjustment ~lower:0.001 ~upper:2. ~value:1. ~step_incr:0.01 ~page_size:0. () in
+  let _ = GRange.scale `HORIZONTAL ~value_pos:`RIGHT ~adjustment:speed_factor ~digits:3 ~packing:(hbox#pack ~expand:true ~padding:10) () in
 
   let _ = GMisc.separator `HORIZONTAL ~packing:(vbox#pack ~expand:false ~padding:5) () in
 
@@ -63,7 +63,12 @@ let main () =
       root_pitch := Midi.root_pitch_of_key key;
       key_label#set_label (Midi.pretty_print_key key);
       meter_label#set_label ((string_of_int (!meter).Midi.numerator)^"/"^(string_of_int (!meter).Midi.denominator));
-      tempo_label#set_label ("♩ = "^ (string_of_int (truncate !tempo)))
+      let l = if speed_factor#value <> 1.0 then
+	  ("♩ = "^ (string_of_int (truncate (!tempo *. speed_factor#value))) ^ " ("^ (string_of_int (truncate !tempo))^")")
+	else
+	  ("♩ = "^ (string_of_int (truncate !tempo)))
+      in
+      tempo_label#set_label l
     end
   end in
 
