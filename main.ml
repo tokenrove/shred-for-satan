@@ -43,9 +43,9 @@ let main () =
 
   let hbox = GPack.hbox ~packing:(vbox#pack ~expand:false) ~border_width:10 () in
   let position = GData.adjustment ~lower:1. ~upper:666. ~value:1. ~page_size:0. () in
-  let _ = GRange.scale `HORIZONTAL ~draw_value:false ~adjustment:position ~packing:(hbox#pack ~expand:true) () in
+  let position_bar = GRange.scale `HORIZONTAL ~draw_value:false ~adjustment:position ~packing:(hbox#pack ~expand:true) () in
   let _ = GMisc.label ~text:"Bar:" ~packing:(hbox#pack ~expand:false) () in
-  let _ = GEdit.spin_button ~adjustment:position ~packing:(hbox#pack ~expand:false) () in
+  let position_box = GEdit.spin_button ~adjustment:position ~packing:(hbox#pack ~expand:false) () in
   let key_label = GMisc.label ~text:"(key)" ~packing:(hbox#pack ~expand:false ~padding:10) () in
   let meter_label = GMisc.label ~text:"4/4" ~packing:(hbox#pack ~expand:false ~padding:10) () in
   let tempo_label = GMisc.label ~text:"♩ = 120" ~packing:(hbox#pack ~expand:false ~padding:10) () in
@@ -95,6 +95,8 @@ let main () =
     a
     in
   ignore (play_btn#connect#clicked ~callback:(fun () ->
+    position_bar#misc#set_sensitive (not (play_btn#active));
+    position_box#misc#set_sensitive (not (play_btn#active));
     let bar_count = ref 0 in
     let next_bar = ref (truncate position#value) in
     let fresh_bar () = begin
