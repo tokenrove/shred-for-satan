@@ -7,9 +7,13 @@ let root_pitch = ref 440.
 let meter = ref {Midi.numerator=4; Midi.denominator=4;}
 let tempo = ref 120.
 
+let quit () =
+  Metronome.quit ();
+  GMain.Main.quit ();;
+
 let main () =
   let window = GWindow.window ~title:"Shred for Satan" () in
-  ignore (window#connect#destroy ~callback:GMain.Main.quit);
+  ignore (window#connect#destroy ~callback:quit);
   let vbox = GPack.vbox ~packing:window#add () in
   let menu_bar = GMenu.menu_bar ~packing:vbox#pack () in
   let file_item = GMenu.menu_item ~label:"File" ~packing:menu_bar#append () in
@@ -116,9 +120,18 @@ let main () =
       ignore (chooser#ok_button#connect#clicked ~callback:(fun () -> load_file chooser#filename; chooser#destroy ()));
       ignore (chooser#cancel_button#connect#clicked ~callback:chooser#destroy);
       chooser#show ()));
-     ("Quit", GMain.Main.quit)];
+     ("Quit", quit)];
 
-  Metronome.init ();
+  (try Metronome.init () with
+    | Metronome.No_device s ->
+      begin
+  	vbox#destroy ();
+  	let vbox = GPack.vbox ~packing:window#add () in
+  	ignore (GMisc.label ~text:s ~packing:(vbox#pack ~expand:false) ());
+  	let b = GButton.button ~label:"Quit" ~packing:(vbox#pack ~expand:false) () in
+  	ignore (b#connect#clicked ~callback:quit)
+      end);
+
   window#show ();
   GtkThread.main ()
 

@@ -1,11 +1,13 @@
 open Bigarray
 
+exception No_device of string;;
+
 let may f x = match x with | (Some x) -> f x | None -> ()
 
 let stream = ref None
 
 let samples_per_sec = 44100.
-let volume = ref 0.375
+let volume = ref 0.8
 type state = Tick | Fade | Rest
 let state = ref Tick
 let duration = ref 0			(* samples *)
@@ -88,14 +90,29 @@ let update _ out l =
 let init () =
   Portaudio.init ();
   at_exit Portaudio.terminate;
-  (* NB: 0 for buffer size == unspecified *)
-  stream := Some (Portaudio.open_default_stream
-		    ~interleaved:true
-		    ~format:Portaudio.format_float32
-		    ~callback:update
-		    0 1 (truncate samples_per_sec) 16384);
+  let continue = ref true in
+  let i = ref ((Portaudio.get_device_count ())-1) in
+  while !continue && !i >= 0 do
+    let outparam = Some { Portaudio.channels=1;
+			  Portaudio.device=(!i);
+			  Portaudio.sample_format=Portaudio.format_float32;
+			  Portaudio.latency=0. } in
+    (* NB: 0 for buffer size == unspecified *)
+    try (stream := Some (Portaudio.open_stream
+			   ~interleaved:true
+			   ~callback:update
+			   None outparam samples_per_sec 0 []);
+	 continue := false) with
+      | Portaudio.Error e -> decr i;
+  done;
+  if !continue then
+    raise (No_device "Tried our best to get an audio device, but failed.  Make sure jack is running with a 44100 Hz sample rate.");
   may Portaudio.start_stream !stream
 
 let stop () =
   (* may Portaudio.stop_stream !stream *)
   mode := Silence
+
+let quit () =
+  may Portaudio.stop_stream !stream
+
