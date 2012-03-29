@@ -11,6 +11,46 @@ let quit () =
   Metronome.quit ();
   GMain.Main.quit ();;
 
+let recent_files = ref []
+let recent_update_hook = ref (fun () -> ())
+
+let rec keep n l = if n < 1 then []
+  else match l with | hd::tl -> hd::(keep (n-1) tl) | [] -> []
+
+(* Add p to the recent list.  If p is already in recent, move it to
+   the top.  If there are more than n items on the list, drop all but
+   n. *)
+let add_to_recent p =
+  let n = 5 in
+  if List.mem p !recent_files then
+    recent_files := p :: (List.filter (fun x -> x <> p) !recent_files)
+  else
+    recent_files := p :: (keep (n-1) !recent_files);
+  (!recent_update_hook)();;
+
+let recent_files_file = Filename.concat (Sys.getenv "HOME") ".shred-for-satan_recent"
+
+let load_recent () =
+  try begin
+    let c = open_in_bin recent_files_file in
+    recent_files := Marshal.from_channel c;
+    close_in_noerr c
+  end with | Sys_error s ->
+    (* recent_files is already [] by default *)
+    Printf.fprintf stderr "Failed to open %s: %s\n" recent_files_file s;;
+
+let save_recent () =
+  try begin
+    let c = open_out_bin recent_files_file in
+    Marshal.to_channel c (!recent_files) [];
+    close_out c
+  end with | Sys_error s ->
+    Printf.fprintf stderr "Failed to save %s: %s\n" recent_files_file s;;
+
+let simple_menu_item r l f =
+  let i = GMenu.menu_item ~label:l ~packing:r#append () in
+  ignore (i#connect#activate ~callback:f);;
+
 let main () =
   let window = GWindow.window ~title:"Shred for Satan" () in
   ignore (window#connect#destroy ~callback:quit);
@@ -78,25 +118,35 @@ let main () =
 
   ignore (position#connect#value_changed ~callback:(fun () -> update_labels_for_position (truncate (position#value))));
 
-  let load_file path = begin
+  let enter_state playing =
+    play_btn#set_label (GtkStock.convert_id (if playing then `MEDIA_STOP else `MEDIA_PLAY));
+    position_bar#misc#set_sensitive (not playing);
+    position_box#misc#set_sensitive (not playing);
+  in
+
+  let load_file path = (try begin
+    play_btn#set_active false;
+    enter_state false;
+    Metronome.stop ();
     midi_state := Midi.read_midi_file path;
     file_label#set_label path;
     position#set_bounds ~upper:(float_of_int (fst (List.hd !midi_state))) ();
     midi_state := List.rev !midi_state;
     position#set_value 1.;
     update_labels_for_position 1;
+    add_to_recent path;
     play_btn#misc#set_sensitive true;
-  end in
+  end with | Sys_error e -> file_label#set_label e;
+    play_btn#misc#set_sensitive false;) in
 
   let construct_measure num denom =
     let dur = ((60. /. !tempo) /. ((float_of_int denom) /. 4.)) /. speed_factor#value in
     let a = Array.make num (!root_pitch,dur) in
     a.(0) <- (fifth !root_pitch,dur);
     a
-    in
+  in
   ignore (play_btn#connect#clicked ~callback:(fun () ->
-    position_bar#misc#set_sensitive (not (play_btn#active));
-    position_box#misc#set_sensitive (not (play_btn#active));
+    enter_state (play_btn#active);
     let bar_count = ref 0 in
     let next_bar = ref (truncate position#value) in
     let fresh_bar () = begin
@@ -112,17 +162,25 @@ let main () =
 	end else (incr next_bar; construct_measure (!meter).Midi.numerator (!meter).Midi.denominator)
       end
     end in
-    play_btn#set_label (GtkStock.convert_id (if play_btn#active then `MEDIA_STOP else `MEDIA_PLAY));
     GtkThread.async (if play_btn#active then (fun () -> Metronome.start fresh_bar) else Metronome.stop) ()));
 
-  List.iter (fun (l,f) -> let i = GMenu.menu_item ~label:l ~packing:file_menu#append () in
-                          ignore (i#connect#activate ~callback:f); ())
-    [("Open",(fun () ->
-      let chooser = GWindow.file_selection ~title:"Choose MIDI file" () in
-      ignore (chooser#ok_button#connect#clicked ~callback:(fun () -> load_file chooser#filename; chooser#destroy ()));
-      ignore (chooser#cancel_button#connect#clicked ~callback:chooser#destroy);
-      chooser#show ()));
-     ("Quit", quit)];
+  simple_menu_item file_menu "Open" (fun () ->
+    let chooser = GWindow.file_selection ~title:"Choose MIDI file" () in
+    ignore (chooser#ok_button#connect#clicked ~callback:(fun () -> load_file chooser#filename; chooser#destroy ()));
+    ignore (chooser#cancel_button#connect#clicked ~callback:chooser#destroy);
+    chooser#show ());
+  let recent_item = GMenu.menu_item ~label:"Recent" ~packing:file_menu#append () in
+  let recent_menu = GMenu.menu ~packing:recent_item#set_submenu () in
+  simple_menu_item file_menu "Quit" quit;
+
+  load_recent ();
+  at_exit save_recent;
+  let populate_recent_menu m =
+    List.iter recent_menu#remove (recent_menu#all_children);
+    List.iter (fun p -> simple_menu_item m (Filename.basename p) (fun () -> load_file p)) !recent_files
+  in
+  recent_update_hook := (fun () -> populate_recent_menu recent_menu);
+  (!recent_update_hook) ();
 
   (try Metronome.init () with
     | Metronome.No_device s ->
