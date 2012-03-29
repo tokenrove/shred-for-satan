@@ -73,11 +73,14 @@ let main () =
   let _ = GEdit.spin_button ~adjustment:preroll_numerator ~packing:(hbox#pack ~expand:false) () in
   let _ = GMisc.label ~text:"/" ~packing:(hbox#pack ~expand:false) () in
   let _ = GEdit.spin_button ~adjustment:preroll_denominator ~packing:(hbox#pack ~expand:false) () in
+  let preroll_arrow = GMisc.arrow ~show:false ~packing:(hbox#pack ~expand:false) ~kind:`LEFT () in
 
   let frame = GBin.frame ~label:"Speed:" ~packing:(vbox#pack ~expand:false ~padding:5) ~border_width:10 () in
   let hbox = GPack.hbox ~packing:frame#add () in
   let speed_factor = GData.adjustment ~lower:0.001 ~upper:2. ~value:1. ~step_incr:0.01 ~page_size:0. () in
   let _ = GRange.scale `HORIZONTAL ~value_pos:`RIGHT ~adjustment:speed_factor ~digits:3 ~packing:(hbox#pack ~expand:true ~padding:10) () in
+  let speed_reset = GButton.button ~label:"Reset" ~packing:(hbox#pack ~expand:false) () in
+  ignore (speed_reset#connect#clicked ~callback:(fun () -> speed_factor#set_value 1.));
 
   let _ = GMisc.separator `HORIZONTAL ~packing:(vbox#pack ~expand:false ~padding:5) () in
 
@@ -152,8 +155,11 @@ let main () =
     let fresh_bar () = begin
       incr bar_count;
       if !bar_count <= truncate (preroll_bars#value) then begin
+	preroll_arrow#misc#show ();
+	GtkThread.async (fun () -> update_labels_for_position (truncate position#value)) ();
 	construct_measure (truncate (preroll_numerator#value)) (truncate (preroll_denominator#value))
       end else begin
+	preroll_arrow#misc#hide ();
 	position#set_value (float_of_int !next_bar);
 	GtkThread.async (fun () -> update_labels_for_position (truncate position#value)) ();
 	if position#value >= position#upper then begin
