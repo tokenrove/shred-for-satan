@@ -62,6 +62,7 @@ let main () =
   (* File label *)
   let file_label = GMisc.label ~text:"No file loaded.  (Use Open from the File menu)"
     ~packing:(vbox#pack ~expand:false) () in
+
   let _ = GMisc.separator `HORIZONTAL ~packing:(vbox#pack ~expand:false ~padding:5) () in
 
   (* Preroll *)
@@ -77,16 +78,6 @@ let main () =
   let _ = GMisc.label ~text:"/" ~packing:(hbox#pack ~expand:false) () in
   let _ = GEdit.spin_button ~adjustment:preroll_denominator ~packing:(hbox#pack ~expand:false) () in
 
-  (* Speed adjustment *)
-  let frame = GBin.frame ~label:"Speed:" ~packing:(vbox#pack ~expand:false ~padding:5) ~border_width:10 () in
-  let hbox = GPack.hbox ~packing:frame#add () in
-  let speed_factor = GData.adjustment ~lower:0.001 ~upper:2. ~value:1. ~step_incr:0.01 ~page_size:0. () in
-  let _ = GRange.scale `HORIZONTAL ~value_pos:`RIGHT ~adjustment:speed_factor ~digits:3 ~packing:(hbox#pack ~expand:true ~padding:10) () in
-  let speed_reset = GButton.button ~label:"Reset" ~packing:(hbox#pack ~expand:false) () in
-  ignore (speed_reset#connect#clicked ~callback:(fun () -> speed_factor#set_value 1.));
-
-  let _ = GMisc.separator `HORIZONTAL ~packing:(vbox#pack ~expand:false ~padding:5) () in
-
   (* Position bar *)
   let hbox = GPack.hbox ~packing:(vbox#pack ~expand:false) ~border_width:10 () in
   let position_arrow = GMisc.arrow ~show:false ~packing:(hbox#pack ~expand:false) ~kind:`RIGHT () in
@@ -97,6 +88,16 @@ let main () =
   let key_label = GMisc.label ~text:"(key)" ~packing:(hbox#pack ~expand:false ~padding:10) () in
   let meter_label = GMisc.label ~text:"4/4" ~packing:(hbox#pack ~expand:false ~padding:10) () in
   let tempo_label = GMisc.label ~text:"♩ = 120" ~packing:(hbox#pack ~expand:false ~padding:10) () in
+
+  let _ = GMisc.separator `HORIZONTAL ~packing:(vbox#pack ~expand:false ~padding:5) () in
+
+  (* Speed adjustment *)
+  let frame = GBin.frame ~label:"Speed:" ~packing:(vbox#pack ~expand:false ~padding:5) ~border_width:10 () in
+  let hbox = GPack.hbox ~packing:frame#add () in
+  let speed_factor = GData.adjustment ~lower:0.001 ~upper:2. ~value:1. ~step_incr:0.01 ~page_size:0. () in
+  let _ = GRange.scale `HORIZONTAL ~value_pos:`RIGHT ~adjustment:speed_factor ~digits:3 ~packing:(hbox#pack ~expand:true ~padding:10) () in
+  let speed_reset = GButton.button ~label:"Reset" ~packing:(hbox#pack ~expand:false) () in
+  ignore (speed_reset#connect#clicked ~callback:(fun () -> speed_factor#set_value 1.));
 
   (* Play button *)
   let play_btn = GButton.toggle_button ~stock:`MEDIA_PLAY ~packing:(vbox#pack ~expand:false) () in
@@ -125,19 +126,18 @@ let main () =
     end
   end in
 
-  ignore (position#connect#value_changed ~callback:(fun () -> update_labels_for_position (truncate (position#value))));
+  ignore (position#connect#value_changed
+	    ~callback:(fun () -> update_labels_for_position (truncate (position#value))));
 
-  let enter_state playing =
-    play_btn#set_label (GtkStock.convert_id (if playing then `MEDIA_STOP else `MEDIA_PLAY));
-    preroll_arrow#misc#hide ();
-    position_arrow#misc#hide ();
-    position_bar#misc#set_sensitive (not playing);
-    position_box#misc#set_sensitive (not playing);
+  let enter_playing_state playingp =
+    play_btn#set_label (GtkStock.convert_id (if playingp then `MEDIA_STOP else `MEDIA_PLAY));
+    List.iter (fun x -> x#misc#hide ()) [preroll_arrow; position_arrow];
+    List.iter (fun x -> x#set_sensitive (not playingp)) [position_bar#misc; position_box#misc];
   in
 
   let load_file path = (try begin
     play_btn#set_active false;
-    enter_state false;
+    enter_playing_state false;
     Metronome.stop ();
     midi_state := Midi.read_midi_file path;
     file_label#set_label path;
@@ -157,20 +157,18 @@ let main () =
     a
   in
   ignore (play_btn#connect#clicked ~callback:(fun () ->
-    enter_state (play_btn#active);
+    enter_playing_state (play_btn#active);
     let bar_count = ref 0 in
     let next_bar = ref (truncate position#value) in
     let fresh_bar () = begin
       incr bar_count;
       if !bar_count <= truncate (preroll_bars#value) then begin
 	preroll_arrow#misc#show ();
-	GtkThread.async (fun () -> update_labels_for_position (truncate position#value)) ();
 	construct_measure (truncate (preroll_numerator#value)) (truncate (preroll_denominator#value))
       end else begin
 	preroll_arrow#misc#hide ();
 	position_arrow#misc#show ();
 	position#set_value (float_of_int !next_bar);
-	GtkThread.async (fun () -> update_labels_for_position (truncate position#value)) ();
 	if position#value >= position#upper then begin
 	  play_btn#set_active false;
 	  [| (0.,1.) |]
@@ -181,7 +179,8 @@ let main () =
 
   simple_menu_item file_menu "Open" (fun () ->
     let chooser = GWindow.file_selection ~title:"Choose MIDI file" () in
-    ignore (chooser#ok_button#connect#clicked ~callback:(fun () -> load_file chooser#filename; chooser#destroy ()));
+    ignore (chooser#ok_button#connect#clicked
+	      ~callback:(fun () -> load_file chooser#filename; chooser#destroy ()));
     ignore (chooser#cancel_button#connect#clicked ~callback:chooser#destroy);
     chooser#show ());
   let recent_item = GMenu.menu_item ~label:"Recent" ~packing:file_menu#append () in
@@ -191,7 +190,7 @@ let main () =
   load_recent ();
   at_exit save_recent;
   let populate_recent_menu m =
-    List.iter recent_menu#remove (recent_menu#all_children);
+    List.iter m#remove (m#all_children);
     List.iter (fun p -> simple_menu_item m (Filename.basename p) (fun () -> load_file p)) !recent_files
   in
   recent_update_hook := (fun () -> populate_recent_menu recent_menu);
@@ -202,7 +201,7 @@ let main () =
       begin
   	vbox#destroy ();
   	let vbox = GPack.vbox ~packing:window#add () in
-  	ignore (GMisc.label ~text:s ~packing:(vbox#pack ~expand:false) ());
+  	let _ = GMisc.label ~text:s ~packing:(vbox#pack ~expand:false) () in
   	let b = GButton.button ~label:"Quit" ~packing:(vbox#pack ~expand:false) () in
   	ignore (b#connect#clicked ~callback:quit)
       end);

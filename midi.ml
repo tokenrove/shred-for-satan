@@ -30,7 +30,8 @@ let rec read_events accum_t state bs =
 	_:8; _:8; rest:-1:bitstring } ->
       (let state = (accum_t, Meter { numerator=numer; denominator=denom; }) :: state in
        read_events accum_t state rest)
-    (* XXX change this back to signed once bitstrings.ml is fixed *)
+    (* XXX change this back to signed once bitstrings.ml is fixed:
+     * see http://code.google.com/p/bitstring/issues/detail?id=10 *)
     | { 0xff:8; 0x59:8; 2:8; accidentals:8:unsigned,bind((accidentals lxor 0x80) - 0x80); scale:8; rest:-1:bitstring } ->
       (let key = (if scale == 0 then MajorKey accidentals else MinorKey accidentals) in
        read_events accum_t ((accum_t, Key key) :: state) rest)
