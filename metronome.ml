@@ -6,11 +6,8 @@ let may f x = match x with | (Some x) -> f x | None -> ()
 
 let stream = ref None
 
-let samples_per_sec = 44100.
+let samples_per_sec = ref 44100.
 let volume = ref 0.8
-type state = Tick | Fade | Rest
-let state = ref Tick
-let duration = ref 0			(* samples *)
 
 let tick_duration = 0.04		(* seconds *)
 let fade_samples = 128			(* samples *)
@@ -21,6 +18,9 @@ let new_measure_fn = ref (fun () -> [| (0.,1.) |])
 let measure = ref (!new_measure_fn ())
 
 let inner_vol = ref 0.
+type state = Tick | Fade | Rest
+let state = ref Tick
+let duration = ref 0			(* samples *)
 type mode = Silence | Sound
 let mode = ref Silence
 
@@ -32,9 +32,9 @@ let next_beat () =
 
 let next_period () =
   let pitch = (fst (!measure).(!measure_p)) in
-  if pitch = 0. then 0. else samples_per_sec /. pitch
+  if pitch = 0. then 0. else !samples_per_sec /. pitch
 
-let tick_duration_samples = (truncate (samples_per_sec *. tick_duration)) - fade_samples
+let tick_duration_samples = (truncate (!samples_per_sec *. tick_duration)) - fade_samples
 
 let s_count = ref 0.
 
@@ -76,7 +76,7 @@ let update _ out l =
 	| Fade ->
 	  state := Rest;
 	  let t = (snd (!measure).(!measure_p)) in
-	  duration := truncate (samples_per_sec *. (t -. tick_duration))
+	  duration := truncate (!samples_per_sec *. (t -. tick_duration))
 	| Rest ->
 	  state := Tick; inner_vol := !volume; next_beat ();
 	  s_count := 0.;
@@ -91,22 +91,26 @@ let init () =
   Portaudio.init ();
   at_exit Portaudio.terminate;
   let continue = ref true in
-  let i = ref ((Portaudio.get_device_count ())-1) in
+  let n = Portaudio.get_device_count () in
+  let i = ref (n-1) in
   while !continue && !i >= 0 do
     let outparam = Some { Portaudio.channels=1;
 			  Portaudio.device=(!i);
 			  Portaudio.sample_format=Portaudio.format_float32;
 			  Portaudio.latency=0. } in
-    (* NB: 0 for buffer size == unspecified *)
-    try (stream := Some (Portaudio.open_stream
+    try (let d = Portaudio.get_device_info (!i) in
+	 samples_per_sec := d.Portaudio.d_default_sample_rate;
+	 stream := Some (Portaudio.open_stream
 			   ~interleaved:true
 			   ~callback:update
-			   None outparam samples_per_sec 0 []);
+			   None outparam !samples_per_sec 16384 []);
 	 continue := false) with
-      | Portaudio.Error e -> decr i;
+      | Portaudio.Error e -> decr i
+      | Portaudio.Unanticipated_host_error -> decr i;
   done;
   if !continue then
-    raise (No_device "Tried our best to get an audio device, but failed.  Make sure jack is running with a 44100 Hz sample rate.");
+    raise (No_device ("Tried our best to get an audio device, but failed."^
+			 "  Make sure jack is running."));
   may Portaudio.start_stream !stream
 
 let stop () =
@@ -115,4 +119,3 @@ let stop () =
 
 let quit () =
   may Portaudio.stop_stream !stream
-
