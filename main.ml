@@ -59,12 +59,15 @@ let main () =
   let file_item = GMenu.menu_item ~label:"File" ~packing:menu_bar#append () in
   let file_menu = GMenu.menu ~packing:file_item#set_submenu () in
 
+  (* File label *)
   let file_label = GMisc.label ~text:"No file loaded.  (Use Open from the File menu)"
     ~packing:(vbox#pack ~expand:false) () in
   let _ = GMisc.separator `HORIZONTAL ~packing:(vbox#pack ~expand:false ~padding:5) () in
 
+  (* Preroll *)
   let frame = GBin.frame ~label:"Preroll:" ~packing:(vbox#pack ~expand:false ~padding:5) ~border_width:10 () in
   let hbox = GPack.hbox ~packing:frame#add ~border_width:10 () in
+  let preroll_arrow = GMisc.arrow ~show:false ~packing:(hbox#pack ~expand:false) ~kind:`RIGHT () in
   let preroll_bars = GData.adjustment ~lower:0. ~value:2. ~page_size:0. () in
   let _ = GEdit.spin_button ~adjustment:preroll_bars ~packing:(hbox#pack ~expand:false) () in
   let _ = GMisc.label ~text:"bars of" ~packing:(hbox#pack ~expand:false) () in
@@ -73,8 +76,8 @@ let main () =
   let _ = GEdit.spin_button ~adjustment:preroll_numerator ~packing:(hbox#pack ~expand:false) () in
   let _ = GMisc.label ~text:"/" ~packing:(hbox#pack ~expand:false) () in
   let _ = GEdit.spin_button ~adjustment:preroll_denominator ~packing:(hbox#pack ~expand:false) () in
-  let preroll_arrow = GMisc.arrow ~show:false ~packing:(hbox#pack ~expand:false) ~kind:`LEFT () in
 
+  (* Speed adjustment *)
   let frame = GBin.frame ~label:"Speed:" ~packing:(vbox#pack ~expand:false ~padding:5) ~border_width:10 () in
   let hbox = GPack.hbox ~packing:frame#add () in
   let speed_factor = GData.adjustment ~lower:0.001 ~upper:2. ~value:1. ~step_incr:0.01 ~page_size:0. () in
@@ -84,7 +87,9 @@ let main () =
 
   let _ = GMisc.separator `HORIZONTAL ~packing:(vbox#pack ~expand:false ~padding:5) () in
 
+  (* Position bar *)
   let hbox = GPack.hbox ~packing:(vbox#pack ~expand:false) ~border_width:10 () in
+  let position_arrow = GMisc.arrow ~show:false ~packing:(hbox#pack ~expand:false) ~kind:`RIGHT () in
   let position = GData.adjustment ~lower:1. ~upper:666. ~value:1. ~page_size:0. () in
   let position_bar = GRange.scale `HORIZONTAL ~draw_value:false ~adjustment:position ~packing:(hbox#pack ~expand:true) () in
   let _ = GMisc.label ~text:"Bar:" ~packing:(hbox#pack ~expand:false) () in
@@ -93,6 +98,7 @@ let main () =
   let meter_label = GMisc.label ~text:"4/4" ~packing:(hbox#pack ~expand:false ~padding:10) () in
   let tempo_label = GMisc.label ~text:"♩ = 120" ~packing:(hbox#pack ~expand:false ~padding:10) () in
 
+  (* Play button *)
   let play_btn = GButton.toggle_button ~stock:`MEDIA_PLAY ~packing:(vbox#pack ~expand:false) () in
   play_btn#misc#set_sensitive false;
 
@@ -109,7 +115,7 @@ let main () =
 	with | (_,Midi.Key k) -> k | _ -> blank) in
       root_pitch := Midi.root_pitch_of_key key;
       key_label#set_label (Midi.pretty_print_key key);
-      meter_label#set_label ((string_of_int (!meter).Midi.numerator)^"/"^(string_of_int (!meter).Midi.denominator));
+      meter_label#set_label (Midi.string_of_meter !meter);
       let l = if speed_factor#value <> 1.0 then
 	  ("♩ = "^ (string_of_int (truncate (!tempo *. speed_factor#value))) ^ " ("^ (string_of_int (truncate !tempo))^")")
 	else
@@ -123,6 +129,8 @@ let main () =
 
   let enter_state playing =
     play_btn#set_label (GtkStock.convert_id (if playing then `MEDIA_STOP else `MEDIA_PLAY));
+    preroll_arrow#misc#hide ();
+    position_arrow#misc#hide ();
     position_bar#misc#set_sensitive (not playing);
     position_box#misc#set_sensitive (not playing);
   in
@@ -160,6 +168,7 @@ let main () =
 	construct_measure (truncate (preroll_numerator#value)) (truncate (preroll_denominator#value))
       end else begin
 	preroll_arrow#misc#hide ();
+	position_arrow#misc#show ();
 	position#set_value (float_of_int !next_bar);
 	GtkThread.async (fun () -> update_labels_for_position (truncate position#value)) ();
 	if position#value >= position#upper then begin

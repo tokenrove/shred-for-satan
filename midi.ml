@@ -50,19 +50,24 @@ let read_track n bs =
 	events: (Int32.to_int chunk_len):bitstring; rest: -1:bitstring } ->
       (read_events 0 [] events, rest)
 
-(* Note that this also reverses the list. *)
+(* Resulting state is in chronological order.
+ * Note that this also reverses the list. *)
 let merge_key_changes state =
   let fn xs y = match (xs,y) with
     | ((t,Key k) :: rest, (u,Key l)) when (t = u && k = l) -> xs
     | _ -> y :: xs in
   List.fold_left fn [] state
-(* Expects state in chronological order. *)
+
+let ticks_per_bar td meter =
+  (float_of_int td) *. ((float_of_int meter.numerator) /. ((float_of_int meter.denominator)/.4.))
+
+(* Convert delta_t to bar numbers with time_division
+ * Expects state in chronological order. *)
 let convert_to_bar_numbers state time_division =
   let rec fn ins outs n t meter =
     let munge u =
       (let dt = u-t in
-       let ticks_per_bar = (float_of_int time_division) *. ((float_of_int meter.numerator) /. ((float_of_int meter.denominator)/.4.)) in
-       n + truncate ((float_of_int dt)/.ticks_per_bar)) in
+       n + truncate ((float_of_int dt)/.(ticks_per_bar time_division meter))) in
     match ins with
     | (u,Meter m) :: rest ->
       let n = munge u in fn rest ((n,Meter m) :: outs) n u m
@@ -70,6 +75,9 @@ let convert_to_bar_numbers state time_division =
     | [] -> outs
   in
   fn state [] 1 0 {numerator=4; denominator=4;}
+
+let filter_extraneous_end_of_tracks state =
+  (List.hd state) :: List.filter (function (_,EndOfTrack) -> false | _ -> true) (List.tl state)
 
 let read_midi_file path =
   let midi_file = Bitstring.bitstring_of_file path in
@@ -82,17 +90,17 @@ let read_midi_file path =
 	  fn rest state (n-1)
       in
       let state = fn rest [] n_tracks in
-      (* filter extraneous end of tracks *)
-      let state = (List.hd state) :: List.filter (function (_,EndOfTrack) -> false | _ -> true) (List.tl state) in
-      (* merge common key changes; note that state is now in chronological order *)
+      let state = filter_extraneous_end_of_tracks state in
       let state = merge_key_changes state in
-      (* convert delta_t to bar numbers with time_division *)
       let state = convert_to_bar_numbers state time_division in
       state
     | { _ } -> raise (Failure "Not a valid MIDI file")
   ;;
 
-let circle_of_fifths = [| ("Ab",415.305);("Eb",311.127);("Bb",466.164);("F",349.228);("C",261.626);("G",391.995);("D",293.665);("A",440.);("E",329.628);("B",493.883);("F#",369.994);("C#",277.183);("G#",415.305);("D#",311.127);("A#",466.144) |]
+let circle_of_fifths =
+  [| ("Ab",415.305);("Eb",311.127);("Bb",466.164);("F",349.228);("C",261.626);
+     ("G",391.995);("D",293.665);("A",440.);("E",329.628);("B",493.883);
+     ("F#",369.994);("C#",277.183);("G#",415.305);("D#",311.127);("A#",466.144) |]
 
 let remainder x y = match (x mod y) with r when r < 0 -> r+y | r -> r
 
@@ -104,7 +112,10 @@ let root_pitch_of_key = function
   | MinorKey acc -> (snd circle_of_fifths.(remainder (acc+7) 15))
   | MajorKey acc -> (snd circle_of_fifths.(remainder (acc+4) 15))
 
-(* 
+let string_of_meter m = (string_of_int m.numerator)^"/"^(string_of_int m.denominator)
+
+(* Stand-alone test function:
+ *
  * let _ =
  *   let pp = function | EndOfTrack -> "end of track"
  *     | Meter x -> "meter change: " ^ (string_of_int x.numerator) ^ "/" ^ (string_of_int x.denominator)
