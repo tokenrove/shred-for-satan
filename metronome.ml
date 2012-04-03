@@ -1,3 +1,6 @@
+(* Copyright 2011 Julian Squires <julian@cipht.net>
+ * Please see the COPYING file for license information. *)
+
 open Bigarray
 
 exception No_device of string;;

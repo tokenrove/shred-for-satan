@@ -1,3 +1,5 @@
+(* Copyright 2011 Julian Squires <julian@cipht.net>
+ * Please see the COPYING file for license information. *)
 
 let locale = GMain.Main.init ()
 
@@ -156,7 +158,7 @@ let main () =
     a.(0) <- (fifth !root_pitch,dur);
     a
   in
-  ignore (play_btn#connect#clicked ~callback:(fun () ->
+  let _ = play_btn#connect#clicked ~callback:begin fun () ->
     enter_playing_state (play_btn#active);
     let bar_count = ref 0 in
     let next_bar = ref (truncate position#value) in
@@ -175,7 +177,8 @@ let main () =
 	end else (incr next_bar; construct_measure (!meter).Midi.numerator (!meter).Midi.denominator)
       end
     end in
-    GtkThread.async (if play_btn#active then (fun () -> Metronome.start fresh_bar) else Metronome.stop) ()));
+    GtkThread.async (if play_btn#active then (fun () -> Metronome.start fresh_bar) else Metronome.stop) ()
+  end in
 
   simple_menu_item file_menu "Open" (fun () ->
     let chooser = GWindow.file_selection ~title:"Choose MIDI file" () in

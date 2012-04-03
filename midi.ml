@@ -1,3 +1,5 @@
+(* Copyright 2011 Julian Squires <julian@cipht.net>
+ * Please see the COPYING file for license information. *)
 
 (* 
    - read header, verify magic and count number of tracks
