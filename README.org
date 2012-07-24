@@ -1,0 +1,19 @@
+
+#+ATTR_HTML: alt="[screenshot]" style="float:right; padding:5px;"
+[[http://cipht.net/images/2012-04-02-shred-01.png][http://cipht.net/images/2012-04-02-shred-01-thumb.png]]
+
+This is a little GTK-based metronome I wrote for [[http://kylatilley.com/blog/][Kyla]] to practice the
+[[http://molt.ca/][Molt]] material.  It was created because the material contains a lot of
+meter and tempo changes, which are hard to practice with a
+conventional metronome.  So this one reads key, meter, and tempo
+changes from a MIDI file.  Since we prepare all our scores with
+[[http://lilypond.org/][Lilypond]], we have MIDI files that include all the requisite
+information.
+
+It needs ocaml, lablgtk, ocaml-bitstring, and a recent version of
+ocaml-portaudio (one that uses portaudio v19) to build.
+
+Despite the fact that it uses portaudio, I've only tested it with JACK
+running.  There's something broken in portaudio's interaction with
+JACK, so you might find that it won't obtain the correct ALSA device
+if JACK isn't running.
