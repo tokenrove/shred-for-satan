@@ -90,7 +90,9 @@ let main () =
     a.(0) <- (fifth !root_pitch,dur);
     a
     in
+  let last_position = ref position#value in
   ignore (play_btn#connect#clicked ~callback:(fun () ->
+    if play_btn#active then last_position := position#value else position#set_value !last_position;
     let bar_count = ref 0 in
     let next_bar = ref (truncate position#value) in
     let fresh_bar () = begin
