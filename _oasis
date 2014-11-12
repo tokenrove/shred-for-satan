@@ -3,7 +3,7 @@ Name:        shred-for-satan
 Version:     0
 Synopsis:    MIDI-driven metronome
 Authors:     Julian Squires
-License:     BSD3
+License:     GPL
 
 Executable shred
   Path:       .
@@ -11,7 +11,5 @@ Executable shred
   BuildTools: ocamlbuild
   ByteOpt:    -thread
   NativeOpt:  -thread
-  BuildDepends: unix, threads, lablgtk2, bigarray, camlp4.lib, bitstring.syntax, portaudio
+  BuildDepends: unix, threads, lablgtk2, bigarray, camlp4.lib, bitstring, bitstring.syntax, portaudio
   MainIs:     main.ml
-
-
