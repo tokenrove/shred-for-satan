@@ -13,3 +13,14 @@ Executable shred
   NativeOpt:  -thread
   BuildDepends: unix, threads, lablgtk2, bigarray, camlp4.lib, bitstring, bitstring.syntax, portaudio
   MainIs:     main.ml
+
+Executable "test_midi"
+  Install:      false
+  Path:         .
+  BuildTools:   ocamlbuild
+  MainIs:       test_midi.ml
+  BuildDepends: testsimple, camlp4.lib, bitstring, bitstring.syntax
+
+Test unit
+  TestTools: prove, test_midi
+  Command: $prove -v $test_midi
