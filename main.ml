@@ -15,7 +15,9 @@ let construct_measure m speed_factor =
   a.(0) <- (fifth !root_pitch,dur);
   a
 
-type preroll_box = {bars:GData.adjustment; numerator:GData.adjustment; denominator:GData.adjustment}
+type preroll_box = {bars:GData.adjustment;
+                    numerator_adjustment:GData.adjustment;
+                    denominator_adjustment:GData.adjustment}
 
 let make_preroll packing =
   let frame = GBin.frame ~label:"Preroll:" ~packing ~border_width:10 () in
@@ -24,12 +26,12 @@ let make_preroll packing =
   let packing = (hbox#pack ~expand:false) in
   GEdit.spin_button ~adjustment:bars ~packing () |> ignore;
   GMisc.label ~text:"bars of" ~packing () |> ignore;
-  let numerator = GData.adjustment ~lower:1. ~value:4. ~page_size:0. () in
-  let denominator = GData.adjustment ~lower:1. ~value:4. ~page_size:0. () in
-  let _ = GEdit.spin_button ~adjustment:numerator ~packing () in
+  let numerator_adjustment = GData.adjustment ~lower:1. ~value:4. ~page_size:0. () in
+  let denominator_adjustment = GData.adjustment ~lower:1. ~value:4. ~page_size:0. () in
+  let _ = GEdit.spin_button ~adjustment:numerator_adjustment ~packing () in
   let _ = GMisc.label ~text:"/" ~packing:(hbox#pack ~expand:false) () in
-  let _ = GEdit.spin_button ~adjustment:denominator ~packing () in
-  {bars; numerator; denominator}
+  let _ = GEdit.spin_button ~adjustment:denominator_adjustment ~packing () in
+  {bars; numerator_adjustment; denominator_adjustment}
 
 let make_speed_box packing =
   let frame = GBin.frame ~label:"Speed:" ~packing ~border_width:10 () in
@@ -137,8 +139,8 @@ let main () =
       let open Midi in
       incr bar_count;
       if !bar_count <= truncate (preroll.bars#value) then
-        construct_measure {numerator=(truncate (preroll.numerator#value));
-                           denominator=(truncate (preroll.denominator#value))}
+        construct_measure {numerator=(truncate (preroll.numerator_adjustment#value));
+                           denominator=(truncate (preroll.denominator_adjustment#value))}
           speed_factor#value
       else begin
         position#set_value (float_of_int !next_bar);

@@ -9,7 +9,7 @@ Executable shred
   Path:       .
   CompiledObject: native
   BuildTools: ocamlbuild
-  ByteOpt:    -thread
+  ByteOpt:    -thread -w A -warn-error +a-4-48
   NativeOpt:  -thread
   BuildDepends: unix, threads, lablgtk2, bigarray, camlp4.lib, bitstring, bitstring.syntax, portaudio
   MainIs:     main.ml

@@ -36,7 +36,7 @@ let rec read_events accum_t (state:event list) bs =
       | { 0xff:8; 0x59:8; 2:8; accidentals:8:unsigned,bind((accidentals lxor 0x80) - 0x80); scale:8; rest:-1:bitstring } ->
         (let key = (if scale = 0 then MajorKey accidentals else MinorKey accidentals) in
          ((accum_t, Key key) :: state), rest)
-      | { 0xff:8; nature:8; rest:-1:bitstring } ->
+      | { 0xff:8; _nature:8; rest:-1:bitstring } ->
         (let len,rest = read_varlen rest in
          bitmatch rest with
 	 | { _:len*8:bitstring; rest: -1:bitstring } ->
@@ -47,7 +47,7 @@ let rec read_events accum_t (state:event list) bs =
       | { _:4; _:4; _:8; _:8; rest:-1:bitstring } -> state, rest
       in read_events accum_t state rest
 
-let read_track n bs =
+let read_track _n bs =
   bitmatch bs with
     | { "MTrk": 4*8:string; chunk_len: 32:bind(Int32.mul 8l chunk_len);
 	events: (Int32.to_int chunk_len):bitstring; rest: -1:bitstring } ->
@@ -56,7 +56,7 @@ let read_track n bs =
 (* Note that this also reverses the list. *)
 let merge_key_changes state =
   let fn xs y = match (xs,y) with
-    | ((t,Key k) :: rest, (u,Key l)) when (t = u && k = l) -> xs
+    | ((t,Key k) :: _, (u,Key l)) when (t = u && k = l) -> xs
     | _ -> y :: xs in
   fold_left fn [] state
 
@@ -82,7 +82,7 @@ let convert_to_bar_numbers time_division state =
 let read_midi_file path =
   let midi_file = Bitstring.bitstring_of_file path in
   bitmatch midi_file with
-    | { "MThd": 4*8:string; 6l: 32; format: 16; n_tracks: 16; time_division: 16;
+    | { "MThd": 4*8:string; 6l: 32; _format: 16; n_tracks: 16; time_division: 16;
 	rest: -1:bitstring } ->
       let rec fn rest state n = if n = 0 then state else
 	  let (new_state,rest) = (read_track n rest) in
