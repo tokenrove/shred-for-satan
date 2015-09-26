@@ -1,0 +1,13 @@
+sudo: required
+language: c
+install:
+  - sudo apt-get install -qq portaudio19-dev time
+  - wget https://raw.githubusercontent.com/ocaml/ocaml-travisci-skeleton/master/.travis-ocaml.sh
+  - bash -ex .travis-ocaml.sh
+  - opam install -y oasis lablgtk bitstring portaudio testsimple
+script:
+  - eval `opam config env`
+  - oasis setup
+  - ocaml setup.ml -all
+env:
+  - OCAML_VERSION=latest
